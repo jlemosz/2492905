@@ -33,7 +33,7 @@ public static class BuildAutomation
             }
             else
             {
-                Debug.LogWarning("LightingSettings not found. Skipping.");
+                Debug.Log("LightingSettings not found. Skipping.");
             }
 
             // Save the changes to the scene file.
