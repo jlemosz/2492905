@@ -9,7 +9,7 @@ public static class BuildAutomation
 
     public static void DisableAutoBaking()
     {
-        Debug.Log($"Starting to ensure '{TargetLightingSettingsPath}' has auto-baking disabled.");
+        Debug.Log($"Starting to ensure '{TargetLightingSettingsPath}' has all GI baking disabled.");
 
         // Step 1: Load the specific LightingSettings asset the build uses.
         LightingSettings targetSettings = AssetDatabase.LoadAssetAtPath<LightingSettings>(TargetLightingSettingsPath);
@@ -20,21 +20,18 @@ public static class BuildAutomation
             return;
         }
 
-        // Step 2: Modify the asset directly if needed.
-        // Note: We check for 'true' because the obsolete property might still read 'false' incorrectly.
-        // The safest action is to just set it to false regardless.
-        if (targetSettings.autoGenerate)
-        {
-            Debug.LogWarning("'autoGenerate' was true. Setting it to false.");
-        }
-        
-        targetSettings.autoGenerate = false;
+        // Step 2: Disable all settings that can trigger a bake.
+        targetSettings.autoGenerate = false; // Disable auto-generation.
+        targetSettings.bakedGI = false;      // CRITICAL: Disable Baked Global Illumination.
+        targetSettings.realtimeGI = false;   // Also disable Realtime Global Illumination.
+
+        Debug.Log("Set autoGenerate, bakedGI, and realtimeGI to false.");
 
         // Step 3: Mark the asset as dirty and save it to disk.
         EditorUtility.SetDirty(targetSettings);
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
 
-        Debug.Log($"Finished. '{TargetLightingSettingsPath}' is now configured with auto-baking disabled.");
+        Debug.Log($"Finished. '{TargetLightingSettingsPath}' is now configured with all baking disabled.");
     }
 }
