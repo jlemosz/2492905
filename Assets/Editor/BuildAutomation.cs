@@ -1,37 +1,66 @@
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using System.IO;
 
 public static class BuildAutomation
 {
-    // Point this directly to the lighting settings asset your project uses.
-    private const string TargetLightingSettingsPath = "Assets/New Lighting Settings.lighting";
+    // A fallback asset for scenes that don't have any lighting settings assigned.
+    private const string CanonicalLightingSettingsPath = "Assets/Editor/BuildAutomationLightingSettings.lighting";
 
-    public static void DisableAutoBaking()
+    public static void DisableAllBaking()
     {
-        Debug.Log($"Starting to ensure '{TargetLightingSettingsPath}' has all GI baking disabled.");
+        Debug.Log("Starting to disable all GI baking for scenes in the build.");
 
-        // Step 1: Load the specific LightingSettings asset the build uses.
-        LightingSettings targetSettings = AssetDatabase.LoadAssetAtPath<LightingSettings>(TargetLightingSettingsPath);
-
-        if (targetSettings == null)
+        foreach (var scene in EditorBuildSettings.scenes)
         {
-            Debug.LogError($"Could not find the lighting settings asset at '{TargetLightingSettingsPath}'. Please ensure the path is correct. Aborting.");
-            return;
+            if (!scene.enabled || !File.Exists(scene.path) || scene.path.Contains("Packages/"))
+            {
+                continue;
+            }
+
+            EditorSceneManager.OpenScene(scene.path);
+            Debug.Log($"Opened scene: {scene.path}");
+
+            // Get the LightingSettings object currently used by the active scene.
+            LightingSettings currentSettings = Lightmapping.lightingSettings;
+
+            if (currentSettings != null)
+            {
+                // If the scene has an assigned lighting asset, modify it directly.
+                Debug.Log($"Found assigned LightingSettings: '{AssetDatabase.GetAssetPath(currentSettings)}'. Modifying it.");
+                
+                currentSettings.autoGenerate = false;
+                currentSettings.bakedGI = false;
+                currentSettings.realtimeGI = false;
+
+                // Mark the modified asset as dirty and save it.
+                EditorUtility.SetDirty(currentSettings);
+                AssetDatabase.SaveAssets();
+            }
+            else
+            {
+                // If the scene has no assigned asset (using internal defaults), assign our canonical one.
+                Debug.LogWarning("Scene has no assigned LightingSettings. Assigning canonical asset.");
+                
+                // Load or create the canonical asset.
+                LightingSettings canonicalSettings = AssetDatabase.LoadAssetAtPath<LightingSettings>(CanonicalLightingSettingsPath);
+                if (canonicalSettings == null)
+                {
+                    Debug.Log("Canonical asset not found. Creating it.");
+                    canonicalSettings = new LightingSettings { autoGenerate = false, bakedGI = false, realtimeGI = false };
+                    Directory.CreateDirectory(Path.GetDirectoryName(CanonicalLightingSettingsPath));
+                    AssetDatabase.CreateAsset(canonicalSettings, CanonicalLightingSettingsPath);
+                    AssetDatabase.SaveAssets();
+                }
+
+                // Assign the canonical settings to the scene and save the scene itself.
+                Lightmapping.lightingSettings = canonicalSettings;
+                EditorSceneManager.SaveOpenScenes();
+            }
         }
 
-        // Step 2: Disable all settings that can trigger a bake.
-        targetSettings.autoGenerate = false; // Disable auto-generation.
-        targetSettings.bakedGI = false;      // CRITICAL: Disable Baked Global Illumination.
-        targetSettings.realtimeGI = false;   // Also disable Realtime Global Illumination.
-
-        Debug.Log("Set autoGenerate, bakedGI, and realtimeGI to false.");
-
-        // Step 3: Mark the asset as dirty and save it to disk.
-        EditorUtility.SetDirty(targetSettings);
-        AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
-
-        Debug.Log($"Finished. '{TargetLightingSettingsPath}' is now configured with all baking disabled.");
+        Debug.Log("Finished disabling GI baking for all build scenes.");
     }
 }
